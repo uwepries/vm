@@ -18,7 +18,13 @@ class VM {
 
     private $ip = 0;
 
-    function __construct($code = 'HALT', $main = 'main') {
+    function __construct($script = null, $main = 'main') {
+        if (null !== $script) {
+            $code = $this->load($script);
+        } else {
+            $code = 'HALT';
+        }
+       
         $strings = array(); $string_count = 0;
 
         # extract strings
@@ -29,8 +35,8 @@ class VM {
             $strings = array_merge($strings, array("{$ret}:", "{$m[1]}"));
 
             return $ret;
-        }, preg_replace(array("#//[^\n]+$#m", "#/\*.*?\*/#ms"), array(""), $code));
-        
+        }, $code);
+ 
         # split code at white spaces, remove // comments
         $this->code = array_merge(array_values(
             array_filter(
@@ -227,6 +233,7 @@ class VM {
                 break;
 
             case 'HALT';
+
                 break 2; # break loop not switch
 
             default:
@@ -245,14 +252,35 @@ class VM {
         }
     } // fn cpu
 
+    function load($script) {
+        static $seen = array();
+
+        if (isset($seen[$script])) return;
+        $seen[$script] = 1;
+
+        $dirname = dirname($script);
+        $basename = basename($script);
+
+        $code = file_get_contents($script);
+
+        # get rid of comments
+        $code = preg_replace(array("#//[^\n]+$#m", "#/\*.*?\*/#ms"), array(""), $code);
+
+        $code = preg_replace_callback("#include ['\"]?([\w\.]+)['\"]?$#m", function($m) use ($dirname) {
+            return $this->load("$dirname/$m[1]");
+        }, $code);
+
+        return $code;
+    } // fn load
+
 }
 
-$vm = new VM(isset($_SERVER['argv'][1]) && file_exists($_SERVER['argv'][1]) ? file_get_contents($_SERVER['argv'][1]) : 'HALT', 
+$vm = new VM(isset($_SERVER['argv'][1]) && file_exists($_SERVER['argv'][1]) ? $_SERVER['argv'][1] : NULL, 
              isset($_SERVER['argv'][2]) ? $_SERVER['argv'][2] : 'main');
 
 try {
     $vm->cycle(isset($_SERVER['argv'][3]) && $_SERVER['argv'][3]);
 } catch (Exception $ex) {
-    print $ex->getMessage() . " (" . $ex->getLine() . ")";
+    print $ex->getMessage() . " (" . $ex->getLine() . ")" . PHP_EOL;
 }
 
