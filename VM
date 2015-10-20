@@ -1,4 +1,4 @@
-#!/home/up/work/php-src/sapi/cli/php
+#!/usr/bin/env php
 <?php
 
 class VM {
@@ -248,7 +248,7 @@ class VM {
 
 }
 
-$vm = new VM(file_get_contents($_SERVER['argv'][1]), 
+$vm = new VM(isset($_SERVER['argv'][1]) && file_exists($_SERVER['argv'][1]) ? file_get_contents($_SERVER['argv'][1]) : 'HALT', 
              isset($_SERVER['argv'][2]) ? $_SERVER['argv'][2] : 'main');
 
 $vm->cycle(isset($_SERVER['argv'][3]) && $_SERVER['argv'][3]);
