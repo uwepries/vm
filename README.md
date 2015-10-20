@@ -3,6 +3,10 @@ Simple VM written in PHP inspired by Terrence Parr's talk "How to Build a Virtua
 
 https://www.youtube.com/watch?v=OjaAToVkoTw
 
+### Following opcodes are supported for now:
+
+"HALT","ADD","SUB","MUL","DIV","EQ","LT","GT","JMP","JT","JF","PUSH","POP","LOAD","GLOAD","LOADV","STORE","GSTORE","PRINT","PRINTLN","CALL","RET"
+
 # Usage
 
 ### Entry is main if any else top of sctipt
