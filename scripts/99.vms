@@ -1,0 +1,7 @@
+    PUSH 99 
+    PUSH 1
+    ADD
+    GSTORE a100         // store in var
+
+    GLOAD a100          // load var
+    PRINTLN

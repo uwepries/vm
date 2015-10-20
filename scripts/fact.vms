@@ -1,0 +1,34 @@
+a:
+    5
+
+fact:
+    // IF (N < 2) RETURN 1
+    load -3
+    push 2
+    lt
+    jf fact_n
+    push 1
+    ret
+  fact_n:
+    // N * FACT(N-1)
+    load -3
+    load -3
+    push 1
+    sub
+    call fact 1
+    mul
+    ret
+
+main:
+    push a
+    call fact 1
+    gstore factorial
+
+    push "Factorial: "
+    print
+
+    gload factorial
+    println
+
+    halt
+

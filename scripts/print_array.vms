@@ -1,0 +1,58 @@
+some:
+    1
+other:
+    2
+arr:
+    4 5 2 3 1 \0
+
+array_sort:
+    load (-3) // load value at arrays address
+    println
+
+    load -3
+    println
+    
+    load -3
+    push 1
+    add
+    println
+
+  array_sort_end:
+    ret
+
+array_print:
+    load (-3) // load value at arrays address
+    push \0
+    eq
+    jt array_print_end
+
+    load (-3) // load value at arrays address again
+    print
+
+    push ","
+    print
+
+    load -3 // current pointer to array
+    push 1  // add 1
+    add
+
+    call array_print 1 // rekursion
+
+  array_print_end:
+    ret
+
+main:
+    push (arr)
+    call array_sort 1
+
+    push "arr: ["
+    print
+
+    push (arr)
+    call array_print 1
+
+    push "]"
+    println
+
+    halt
+

@@ -1,0 +1,255 @@
+#!/home/up/work/php-src/sapi/cli/php
+<?php
+
+class VM {
+    private $opcodes = array(
+        'HALT' => 0, 
+        'ADD' => 10, 'SUB' => 11, 'MUL' => 12, 'DIV' => 13, 
+        'EQ' => 20, 'LT' => 21, 'GT' => 22,
+        'JMP' => 30, 'JT' => 31, 'JF' => 32,
+        'PUSH' => 40, 'POP' => 41,
+        'LOAD' => 50, 'GLOAD' => 51, 'LOADV' => 52,
+        'STORE' => 60, 'GSTORE' => 61,
+        'PRINT' => 70, 'PRINTLN' => 71, 
+        'CALL' => 80, 'RET' => 81, 
+    );
+
+    private $code = [];
+
+    private $ip = 0;
+
+    function __construct($code = 'HALT', $main = 'main') {
+        $strings = array(); $string_count = 0;
+
+        # extract strings
+        $code = preg_replace_callback(array('#"([^"]+)"#', "#'([^']+)'#"), function($m) use (&$strings, &$string_count) {
+            $string_count++;
+
+            $ret = "_S{$string_count}_";
+            $strings = array_merge($strings, array("{$ret}:", "{$m[1]}"));
+
+            return $ret;
+        }, $code);
+        
+        # split code at white spaces, remove // comments
+        $this->code = array_merge(array_values(
+            array_filter(
+                preg_split('#[\s+]#', preg_replace(array("#//[^\n]+$#m", "#/\*.*?\*/#ms"), array(""), $code)),
+                function($item) { return $item !== ''; }
+            )
+        ), $strings);
+
+        $this->ip = is_numeric($main) 
+                  ? $main 
+                  : (($idx = array_search("{$main}:", $this->code)) !== false
+                     ? $idx
+                     : (array_search("main:", $this->code)) ?: 0);
+    }
+
+    function cycle($trace = 0) {
+        $stack = [];
+        $data = [];
+
+        $sp = -1;
+        $fp = 0;
+
+        $code_len = count($this->code);
+
+        while ($this->ip < $code_len) {
+            $opcode = strtoupper($this->code[$this->ip]); // fetch
+
+            # ommit labels
+            if (substr($opcode, -1) == ':') {
+                $this->ip++;
+                continue;
+            }
+
+            if ($trace) {
+                printf("%04d: %7s (%2d) stack[%s]\n", 
+                        $this->ip, $opcode, $this->opcodes[$opcode], implode(", ", array_slice($stack, 0, $sp+1)));
+            }
+
+            $this->ip++;
+
+            switch ($opcode) {
+            case 'PUSH':
+                $arg = $this->code[$this->ip++];
+
+                $fetch_addr = false;
+                if (preg_match('#\(([^\]]+)\)#', $arg, $m)) {
+                    $arg = $m[1];
+                    $fetch_addr = true;
+                }
+
+                # look for a label
+                $addr = array_search("{$arg}:", $this->code);
+                if (false !== $addr) {
+                    $arg = $this->code[$addr+1];
+                }
+
+                if ($fetch_addr) {
+                    $stack[++$sp] = $addr+1;
+                } else {
+                    $stack[++$sp] = $arg;
+                }
+
+                break;
+
+            case 'POP':
+                --$sp;
+
+                break;
+
+            case 'PRINT':
+                echo $stack[$sp--];
+                break;
+
+            case 'PRINTLN':
+                echo $stack[$sp--] . PHP_EOL;
+                break;
+
+            case 'GSTORE':
+                $v = $stack[$sp--];
+                $addr = $this->code[$this->ip++];
+                $data[$addr] = $v;
+                break;
+
+            case 'GLOAD':
+                $addr = $this->code[$this->ip++];
+                $v = $data[$addr];
+                $stack[++$sp] = $v;
+                break;
+
+            case 'LOAD':
+                $offset = $this->code[$this->ip++];
+
+                $fetch_addr = false;
+                if (preg_match('#\(([^\]]+)\)#', $offset, $m)) {
+                    $fetch_addr = true;
+                    $offset = $m[1];
+                }
+
+                $val = $stack[$fp + $offset];
+
+                if ($fetch_addr) {
+                    $val = $this->code[$val];
+                }
+
+                $stack[++$sp] = $val;
+
+                break;
+
+            case 'JMP':
+                $lbl = $this->code[$this->ip++];
+                $addr = array_search("{$lbl}:", $this->code);
+                if (false === $addr) throw new Exception("Jump to undefined label {$lbl}");
+                $this->ip = $addr;
+                break;
+
+            case 'JT':
+                $lbl = $this->code[$this->ip++];
+                $addr = array_search("{$lbl}:", $this->code);
+                if (false === $addr) throw new Exception("Jump to undefined label {$lbl}");
+                if ($stack[$sp--]) $this->ip = $addr;
+                break;
+
+            case 'JF':
+                $lbl = $this->code[$this->ip++];
+                $addr = array_search("{$lbl}:", $this->code);
+                if (false === $addr) throw new Exception("Jump to undefined label {$lbl}");
+                if (!$stack[$sp--]) $this->ip = $addr;
+                break;
+
+            case 'ADD':
+                $b = $stack[$sp--];
+                $a = $stack[$sp--];
+                $stack[++$sp] = $a + $b;
+                break;
+
+            case 'SUB':
+                $b = $stack[$sp--];
+                $a = $stack[$sp--];
+                $stack[++$sp] = $a - $b;
+                break;
+
+            case 'MUL':
+                $b = $stack[$sp--];
+                $a = $stack[$sp--];
+                $stack[++$sp] = $a * $b;
+                break;
+
+            case 'DIV':
+                $b = $stack[$sp--];
+                $a = $stack[$sp--];
+                $stack[++$sp] = $a / $b;
+                break;
+
+            case 'GT':
+                $b = $stack[$sp--];
+                $a = $stack[$sp--];
+                $stack[++$sp] = intval($a > $b);
+                break;
+
+            case 'LT':
+                $b = $stack[$sp--];
+                $a = $stack[$sp--];
+                $stack[++$sp] = intval($a < $b);
+                break;
+
+            case 'EQ':
+                $b = $stack[$sp--];
+                $a = $stack[$sp--];
+                $stack[++$sp] = intval($a == $b);
+                break;
+
+            case 'CALL':
+                $lbl = $this->code[$this->ip++];           // target addr of function
+                $addr = array_search("{$lbl}:", $this->code);
+                if (false === $addr) throw new Exception("Call to undefined function {$lbl}");
+                $argc = $this->code[$this->ip++];           // number of args
+                $stack[++$sp] = $argc;          // save number of args
+                $stack[++$sp] = $fp;      // save frame pointer
+                $stack[++$sp] = $this->ip;      // push return address
+                $fp = $sp;
+                $this->ip = $addr;
+
+                break;
+
+            case 'RET':
+                $rval = $stack[$sp--];          // pop return value
+                $sp = $fp;                      // jump over locals to fp
+                $this->ip = $stack[$sp--];      // pop return address, jump to it
+                $fp = $stack[$sp--];      // restore fp
+                $argc = $stack[$sp--];          // how many args to throw away
+                $sp -= $argc;                         // pop args
+                $stack[++$sp] = $rval;          // leave result on stack
+
+                break;
+
+            case 'HALT';
+                break 2; # break loop not switch
+
+            default:
+                throw new Exception("invalid opcode {$opcode} @ ip=(" . ($this->ip - 1) . ")");
+            } // switch
+
+            #sleep(1);
+        } // while
+
+        if ($trace) {
+            echo json_encode(array(
+                'STACK', array_slice($stack, 0, $sp+1), 
+                'SP', $sp, 
+                'TOP', $stack[$sp], 
+                'DATA', $data
+            )) . PHP_EOL;
+        }
+    } // fn cpu
+
+}
+
+$vm = new VM(file_get_contents($_SERVER['argv'][1]), 
+             isset($_SERVER['argv'][2]) ? $_SERVER['argv'][2] : 'main');
+
+$vm->cycle(isset($_SERVER['argv'][3]) && $_SERVER['argv'][3]);
+
