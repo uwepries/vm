@@ -1,6 +1,4 @@
-include 'array.vms'
-
-array_sort:
+array_sort: // not finished yet
     load (-3) // load value at array's address
     println
 
