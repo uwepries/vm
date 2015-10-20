@@ -240,7 +240,6 @@ class VM {
             echo json_encode(array(
                 'STACK', array_slice($stack, 0, $sp+1), 
                 'SP', $sp, 
-                'TOP', $stack[$sp], 
                 'DATA', $data
             )) . PHP_EOL;
         }
