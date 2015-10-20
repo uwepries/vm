@@ -29,12 +29,12 @@ class VM {
             $strings = array_merge($strings, array("{$ret}:", "{$m[1]}"));
 
             return $ret;
-        }, $code);
+        }, preg_replace(array("#//[^\n]+$#m", "#/\*.*?\*/#ms"), array(""), $code));
         
         # split code at white spaces, remove // comments
         $this->code = array_merge(array_values(
             array_filter(
-                preg_split('#[\s+]#', preg_replace(array("#//[^\n]+$#m", "#/\*.*?\*/#ms"), array(""), $code)),
+                preg_split('#[\s+]#', $code),
                 function($item) { return $item !== ''; }
             )
         ), $strings);
@@ -251,5 +251,9 @@ class VM {
 $vm = new VM(isset($_SERVER['argv'][1]) && file_exists($_SERVER['argv'][1]) ? file_get_contents($_SERVER['argv'][1]) : 'HALT', 
              isset($_SERVER['argv'][2]) ? $_SERVER['argv'][2] : 'main');
 
-$vm->cycle(isset($_SERVER['argv'][3]) && $_SERVER['argv'][3]);
+try {
+    $vm->cycle(isset($_SERVER['argv'][3]) && $_SERVER['argv'][3]);
+} catch (Exception $ex) {
+    print $ex->getMessage() . " (" . $ex->getLine() . ")";
+}
 

@@ -6,7 +6,7 @@ arr:
     4 5 2 3 1 \0
 
 array_sort:
-    load (-3) // load value at arrays address
+    load (-3) // load value at array's address
     println
 
     load -3
@@ -21,12 +21,12 @@ array_sort:
     ret
 
 array_print:
-    load (-3) // load value at arrays address
+    load (-3) // load value at array's address
     push \0
     eq
     jt array_print_end
 
-    load (-3) // load value at arrays address again
+    load (-3) // load value at array's address again
     print
 
     push ","

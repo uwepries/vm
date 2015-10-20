@@ -5,7 +5,7 @@ https://www.youtube.com/watch?v=OjaAToVkoTw
 
 # Usage
 
-### Entry is top of sctipt
+### Entry is main if any else top of sctipt
 $ ./VM scripts/99.vms
 
 ### Entry is "main" label
