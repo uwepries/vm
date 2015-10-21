@@ -36,14 +36,14 @@ class VM {
 
             return $ret;
         }, $code);
- 
+
         # split code at white spaces, remove // comments
         $this->code = array_merge(array_values(
             array_filter(
                 preg_split('#[\s+]#', $code),
                 function($item) { return $item !== ''; }
             )
-        ), $strings);
+        ), array("HALT"), $strings);
 
         $this->ip = is_numeric($main) 
                   ? $main 
@@ -91,6 +91,12 @@ class VM {
                 $addr = array_search("{$arg}:", $this->code);
                 if (false !== $addr) {
                     $arg = $this->code[$addr+1];
+
+                    # look for a label
+                    $addr = array_search("{$arg}:", $this->code);
+                    if (false !== $addr) {
+                        $arg = $this->code[$addr+1];
+                    }
                 }
 
                 if ($fetch_addr) {
@@ -211,8 +217,17 @@ class VM {
             case 'CALL':
                 $lbl = $this->code[$this->ip++];           // target addr of function
                 $addr = array_search("{$lbl}:", $this->code);
-                if (false === $addr) throw new Exception("Call to undefined function {$lbl}");
                 $argc = $this->code[$this->ip++];           // number of args
+                if (false === $addr) {
+                    if (function_exists($lbl)) {
+                        $ret = call_user_func_array($lbl, array_slice($stack, 0, $argc));
+                        $sp -= $argc;                         // pop args
+                        $stack[++$sp] = $ret;
+                        break;
+                    } else {
+                        throw new Exception("Call to undefined function {$lbl}");
+                    }
+                }
                 $stack[++$sp] = $argc;          // save number of args
                 $stack[++$sp] = $fp;      // save frame pointer
                 $stack[++$sp] = $this->ip;      // push return address

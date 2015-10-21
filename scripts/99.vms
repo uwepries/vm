@@ -1,7 +1,18 @@
-    PUSH 99 
+fool:
+    "FOOLISH"
+
+main:
+    PUSH 9
     PUSH 1
     ADD
     GSTORE a100         // store in var
 
+    PUSH 2
     GLOAD a100          // load var
+    CALL pow 2          // call PHP's pow()
     PRINTLN
+
+    PUSH fool
+    CALL strlen 1       // call PHP's strlen()
+    PRINTLN
+
