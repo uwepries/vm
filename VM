@@ -3,15 +3,16 @@
 
 class VM {
     private $opcodes = array(
-        'HALT' => 0, 
-        'ADD' => 10, 'SUB' => 11, 'MUL' => 12, 'DIV' => 13, 
-        'EQ' => 20, 'LT' => 21, 'GT' => 22,
-        'JMP' => 30, 'JT' => 31, 'JF' => 32,
-        'PUSH' => 40, 'POP' => 41,
-        'LOAD' => 50, 'GLOAD' => 51, 'LOADV' => 52,
-        'STORE' => 60, 'GSTORE' => 61,
-        'PRINT' => 70, 'PRINTLN' => 71, 
-        'CALL' => 80, 'RET' => 81, 
+        'HALT',
+        'ADD', 'SUB', 'MUL', 'DIV',
+        'INC', 'DEC',
+        'EQ', 'LT', 'GT',
+        'JMP', 'JT', 'JF',
+        'PUSH', 'POP',
+        'LOAD', 'GLOAD',
+        'STORE', 'GSTORE',
+        'PRINT', 'PRINTLN',
+        'CALL', 'ENTER', 'RET',
     );
 
     private $code = [];
@@ -24,29 +25,25 @@ class VM {
         } else {
             $code = 'HALT';
         }
-       
+
         $strings = array(); $string_count = 0;
 
         # extract strings
         $code = preg_replace_callback(array('#"([^"]+)"#', "#'([^']+)'#"), function($m) use (&$strings, &$string_count) {
             $string_count++;
 
-            $ret = "_S{$string_count}_";
-            $strings = array_merge($strings, array("{$ret}:", "{$m[1]}"));
+            $ret = "__S{$string_count}";
+            $strings = array_merge($strings, array("{$ret}:", "    {$m[1]}"));
 
             return $ret;
         }, $code);
 
         # split code at white spaces, remove // comments
-        $this->code = array_merge(array_values(
-            array_filter(
-                preg_split('#[\s+]#', $code),
-                function($item) { return $item !== ''; }
-            )
-        ), array("HALT"), $strings);
+        $this->code = array_merge(array_map('trim',$strings),
+                                  array_values(array_filter(preg_split('#[\s+]#', $code))));
 
-        $this->ip = is_numeric($main) 
-                  ? $main 
+        $this->ip = is_numeric($main)
+                  ? $main
                   : (($idx = array_search("{$main}:", $this->code)) !== false
                      ? $idx
                      : (array_search("main:", $this->code)) ?: 0);
@@ -55,11 +52,17 @@ class VM {
     function cycle($trace = 0) {
         $stack = [];
         $data = [];
+        $traces = [];
 
         $sp = -1;
         $fp = 0;
 
         $code_len = count($this->code);
+        $opcodes = array_flip($this->opcodes);
+
+        if ($trace) {
+            ob_start();
+        }
 
         while ($this->ip < $code_len) {
             $opcode = strtoupper($this->code[$this->ip]); // fetch
@@ -71,8 +74,9 @@ class VM {
             }
 
             if ($trace) {
-                printf("%04d: %7s (%2d) stack[%s]\n", 
-                        $this->ip, $opcode, $this->opcodes[$opcode], implode(", ", array_slice($stack, 0, $sp+1)));
+                $traces[] = sprintf("IP=%04d, SP=%04d: %10s (%2d) stack[%s]\n",
+                                    $this->ip, $sp, $opcode, $opcodes[$opcode],
+                                    implode(", ", array_slice($stack, 0, $sp+1)));
             }
 
             $this->ip++;
@@ -92,9 +96,10 @@ class VM {
                 if (false !== $addr) {
                     $arg = $this->code[$addr+1];
 
-                    # look for a label
-                    $addr = array_search("{$arg}:", $this->code);
-                    if (false !== $addr) {
+                    # look for a label indirection
+                    $addr_indirect = array_search("{$arg}:", $this->code);
+                    if (false !== $addr_indirect) {
+                        $addr = $addr_indirect;
                         $arg = $this->code[$addr+1];
                     }
                 }
@@ -184,6 +189,14 @@ class VM {
                 $stack[++$sp] = $a - $b;
                 break;
 
+            case 'INC':
+                $stack[$sp]++;
+                break;
+
+            case 'DEC':
+                $stack[$sp]--;
+                break;
+
             case 'MUL':
                 $b = $stack[$sp--];
                 $a = $stack[$sp--];
@@ -220,7 +233,8 @@ class VM {
                 $argc = $this->code[$this->ip++];           // number of args
                 if (false === $addr) {
                     if (function_exists($lbl)) {
-                        $ret = call_user_func_array($lbl, array_slice($stack, 0, $argc));
+                        $args = array_slice(array_reverse($stack), 0, $argc);
+                        $ret = call_user_func_array($lbl, $args);
                         $sp -= $argc;                         // pop args
                         $stack[++$sp] = $ret;
                         break;
@@ -229,7 +243,7 @@ class VM {
                     }
                 }
                 $stack[++$sp] = $argc;          // save number of args
-                $stack[++$sp] = $fp;      // save frame pointer
+                $stack[++$sp] = $fp;            // save frame pointer
                 $stack[++$sp] = $this->ip;      // push return address
                 $fp = $sp;
                 $this->ip = $addr;
@@ -259,12 +273,21 @@ class VM {
         } // while
 
         if ($trace) {
+            echo 'OUTPUT:' . PHP_EOL . ob_get_clean() . PHP_EOL;
+
             echo json_encode(array(
-                'STACK', array_slice($stack, 0, $sp+1), 
-                'SP', $sp, 
+                'STACK', array_slice($stack, 0, $sp+1),
+                'SP', $sp,
                 'DATA', $data
             )) . PHP_EOL;
+
+            echo implode("", $traces);
+
+            echo implode("\n", $this->code) . PHP_EOL;
+
         }
+
+        return 0;
     } // fn cpu
 
     function load($script) {
@@ -290,12 +313,13 @@ class VM {
 
 }
 
-$vm = new VM(isset($_SERVER['argv'][1]) && file_exists($_SERVER['argv'][1]) ? $_SERVER['argv'][1] : NULL, 
+$vm = new VM(isset($_SERVER['argv'][1]) && file_exists($_SERVER['argv'][1]) ? $_SERVER['argv'][1] : NULL,
              isset($_SERVER['argv'][2]) ? $_SERVER['argv'][2] : 'main');
 
 try {
-    $vm->cycle(isset($_SERVER['argv'][3]) && $_SERVER['argv'][3]);
+    return $vm->cycle(isset($_SERVER['argv'][3]) && $_SERVER['argv'][3]);
 } catch (Exception $ex) {
     print $ex->getMessage() . " (" . $ex->getLine() . ")" . PHP_EOL;
+    throw $ex;
 }
 

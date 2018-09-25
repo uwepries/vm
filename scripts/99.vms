@@ -2,7 +2,7 @@ fool:
     "FOOLISH"
 
 main:
-    PUSH 9
+    PUSH 5
     PUSH 1
     ADD
     GSTORE a100         // store in var
@@ -14,5 +14,16 @@ main:
 
     PUSH fool
     CALL strlen 1       // call PHP's strlen()
+    PRINTLN
+
+    PUSH 2
+    PUSH "test"
+    PUSH 1
+    PUSH "'Test'=%d '%s'=%.2f"
+    CALL sprintf 4
+
+    PRINTLN
+
+    CALL strrev 1
     PRINTLN
 
